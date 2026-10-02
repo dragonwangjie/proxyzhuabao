@@ -1,5 +1,22 @@
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:proxypin/network/http/http.dart';
 import 'package:proxypin/utils/listenable_list.dart';
+
+/// 请求列表批量选择的操作回调（手机版）
+class RequestSelectionHandlers {
+  final Function(HttpRequest request)? onRangeSelection;
+  final VoidCallback? onDeleteSelected;
+  final VoidCallback? onRepeatSelected;
+  final VoidCallback? onExportSelected;
+
+  const RequestSelectionHandlers({
+    this.onRangeSelection,
+    this.onDeleteSelected,
+    this.onRepeatSelected,
+    this.onExportSelected,
+  });
+}
 
 class MultiSelectController {
   final ListenableList<String> selectedIds = ListenableList<String>();

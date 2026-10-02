@@ -56,7 +56,7 @@ import 'package:proxypin/utils/listenable_list.dart';
 import 'package:proxypin/utils/navigator.dart';
 
 import '../app_update/app_update_repository.dart';
-import 'package:proxypin/ui/component/multi_window.dart';
+import 'package:proxypin/ui/component/page_navigator.dart';
 import 'package:proxypin/ui/mobile/debug/breakpoint_executor.dart';
 
 ///移动端首页
@@ -143,6 +143,14 @@ class MobileHomeState extends State<MobileHomePage> implements EventListener, Li
         widget.appConfiguration.flushConfig();
       }));
     }
+    // MCP 本地连接（127.0.0.1）：供手机上的 AI 客户端直连
+    if (widget.appConfiguration.mcpLocalEnabled) {
+      McpService.instance.attach(proxyServer, existing: MobileApp.container.source);
+      unawaited(McpService.instance.startLocal(widget.appConfiguration).catchError((e) {
+        widget.appConfiguration.mcpLocalEnabled = false;
+        widget.appConfiguration.flushConfig();
+      }));
+    }
 
     if (widget.appConfiguration.upgradeNoticeV32) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -151,25 +159,6 @@ class MobileHomeState extends State<MobileHomePage> implements EventListener, Li
     } else if (Platform.isAndroid) {
       AppUpdateRepository.checkUpdate(context);
     }
-
-    // Handle breakpoint window on mobile
-    MultiWindow.onOpenWindow = (widgetName, args) async {
-      if (widgetName == 'BreakpointExecutor' && args != null) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BreakpointExecutor(
-              requestId: args['requestId'],
-              request: HttpRequest.fromJson(jsonDecode(jsonEncode(args['request']))),
-              response:
-                  args['response'] == null ? null : HttpResponse.fromJson(jsonDecode(jsonEncode(args['response']))),
-              isResponse: args['type'] == 'response',
-            ),
-          ),
-        );
-      }
-    };
   }
 
   @override
@@ -352,21 +341,23 @@ class MobileHomeState extends State<MobileHomePage> implements EventListener, Li
 
     String content = isCN
         ? '提示：默认不会开启HTTPS抓包，请安装证书后再开启HTTPS抓包。\n\n'
-            '1. 新增内置 MCP 服务，AI 助手（如 Claude）可接入查看与调试抓包流量；\n'
+            '本版本为安卓手机版：仅保留手机端功能，已移除桌面端与 iOS；\n'
+            '1. 新增内置 MCP 服务，AI 助手（如 Claude）可接入查看与调试抓包流量；'
+            '并支持「本地 MCP 连接」，手机内的 AI 客户端可直接连 127.0.0.1；\n'
             '2. 环境变量支持内置动态变量；\n'
             '3. 请求重写规则支持上移、下移排序；\n'
-            '4. 修复 Windows 端右键菜单导致崩溃的问题；\n'
-            '5. 修复脚本或重写处理多值请求头（如多个 Set-Cookie）时被错误合并的问题；\n'
-            '6. 修复明文 HTTP/2（h2c）抓包、非 ASCII 域名归一化、以 IP 访问时证书校验失败等问题；\n'
-            '7. 修复 iOS 13 崩溃、无 Content-Length 响应 Body 丢失、Android VPN 目的端口记录等若干问题。\n'
+            '4. 修复脚本或重写处理多值请求头（如多个 Set-Cookie）时被错误合并的问题；\n'
+            '5. 修复明文 HTTP/2（h2c）抓包、非 ASCII 域名归一化、以 IP 访问时证书校验失败等问题；\n'
+            '6. 修复无 Content-Length 响应 Body 丢失、Android VPN 目的端口记录等若干问题。\n'
         : 'Note: HTTPS capture is disabled by default — please install the certificate before enabling HTTPS capture.\n\n'
-            '1. Added a built-in MCP server so AI assistants (e.g. Claude) can inspect and debug captured traffic;\n'
+            'This is the Android phone build: desktop and iOS support have been removed.\n'
+            '1. Added a built-in MCP server so AI assistants (e.g. Claude) can inspect and debug captured traffic; '
+            'a new "Local MCP Connection" serves AI clients on the phone itself via 127.0.0.1;\n'
             '2. Added built-in dynamic variables for environments;\n'
             '3. Request rewrite rules can now be reordered with move up/down actions;\n'
-            '4. Fixed a crash triggered by the Windows context menu;\n'
-            '5. Fixed multi-value headers (e.g. multiple Set-Cookie) being incorrectly merged when handled by scripts or rewrite rules;\n'
-            '6. Fixed h2c (plaintext HTTP/2) capture, non-ASCII domain normalization, and certificate validation failures for IP hosts;\n'
-            '7. Fixed an iOS 13 crash, dropped bodies for close-delimited responses, Android VPN destination-port recording, and other issues.\n';
+            '4. Fixed multi-value headers (e.g. multiple Set-Cookie) being incorrectly merged when handled by scripts or rewrite rules;\n'
+            '5. Fixed h2c (plaintext HTTP/2) capture, non-ASCII domain normalization, and certificate validation failures for IP hosts;\n'
+            '6. Fixed dropped bodies for close-delimited responses, Android VPN destination-port recording, and other issues.\n';
     showAlertDialog(isCN ? '更新内容V${AppConfiguration.version}' : "What's new in V${AppConfiguration.version}", content,
         () {
       widget.appConfiguration.upgradeNoticeV32 = false;

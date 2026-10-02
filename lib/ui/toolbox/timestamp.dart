@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:proxypin/ui/component/multi_window_compat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:proxypin/l10n/app_localizations.dart';
@@ -50,7 +49,7 @@ class _TimestampPageState extends State<TimestampPage> {
       nowTimestamp.text = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
     });
 
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.addHandler(onKeyEvent);
     }
   }
@@ -71,7 +70,7 @@ class _TimestampPageState extends State<TimestampPage> {
     if ((HardwareKeyboard.instance.isMetaPressed || HardwareKeyboard.instance.isControlPressed) &&
         event.logicalKey == LogicalKeyboardKey.keyW) {
       HardwareKeyboard.instance.removeHandler(onKeyEvent);
-      WindowController.fromWindowId(widget.windowId!).close();
+      Navigator.of(context).pop();
       return true;
     }
 

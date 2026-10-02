@@ -7,7 +7,7 @@ import 'package:proxypin/network/components/manager/request_breakpoint_manager.d
 import 'package:proxypin/network/http/http.dart';
 import 'package:proxypin/network/util/cache.dart';
 import 'package:proxypin/network/util/logger.dart';
-import 'package:proxypin/ui/component/multi_window.dart';
+import 'package:proxypin/ui/component/page_navigator.dart';
 
 import '../http/http_headers.dart';
 
@@ -95,9 +95,9 @@ class RequestBreakpointInterceptor extends Interceptor {
         Completer<HttpRequest?> completer = Completer();
         _pausedRequests[request.requestId] = completer;
 
-        // Open Breakpoint Executor Window
-        MultiWindow.openWindow("Breakpoint - Request", 'BreakpointExecutor',
-            args: {'type': 'request', 'request': request.toJson(), 'requestId': request.requestId});
+        // Open Breakpoint Executor Page
+        unawaited(PageNavigator.open('BreakpointExecutor',
+            args: {'type': 'request', 'request': request.toJson(), 'requestId': request.requestId}));
 
         return completer.future.then((req) {
           if (req == null) {
@@ -140,13 +140,13 @@ class RequestBreakpointInterceptor extends Interceptor {
         Completer<HttpResponse?> completer = Completer();
         _pausedResponses[request.requestId] = completer;
 
-        // Open Breakpoint Executor Window
-        MultiWindow.openWindow("Breakpoint - Response", 'BreakpointExecutor', args: {
+        // Open Breakpoint Executor Page
+        unawaited(PageNavigator.open('BreakpointExecutor', args: {
           'type': 'response',
           'request': request.toJson(),
           'response': response.toJson(),
           'requestId': request.requestId
-        });
+        }));
 
         return completer.future.then((res) {
           if (res == null) {

@@ -85,7 +85,7 @@ class _MobileMcpSettingState extends State<MobileMcpSetting> {
       if (enabled) {
         await McpService.instance.start(cfg);
       } else {
-        await McpService.instance.stop();
+        await McpService.instance.stopLan();
       }
     } catch (e) {
       cfg.mcpEnabled = false;
@@ -109,7 +109,7 @@ class _MobileMcpSettingState extends State<MobileMcpSetting> {
     cfg.flushConfig();
     try {
       if (_running) {
-        await McpService.instance.stop();
+        await McpService.instance.stopLan();
         // 同 _editPort：stop() 已清空索引，重启前回填，避免重置令牌后历史请求对 AI 不可见
         McpService.instance.attach(widget.proxyServer, existing: MobileApp.container.source);
         await McpService.instance.start(cfg);
@@ -137,7 +137,7 @@ class _MobileMcpSettingState extends State<MobileMcpSetting> {
     cfg.flushConfig();
     try {
       if (_running) {
-        await McpService.instance.stop();
+        await McpService.instance.stopLan();
         // stop() 会清空抓包索引，重启前回填当前列表，否则改端口后历史请求对 AI 不可见
         McpService.instance.attach(widget.proxyServer, existing: MobileApp.container.source);
         await McpService.instance.start(cfg);

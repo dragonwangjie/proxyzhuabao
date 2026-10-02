@@ -17,7 +17,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:proxypin/ui/component/multi_window_compat.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,9 +32,7 @@ import 'package:proxypin/network/http/http.dart';
 import 'package:proxypin/network/util/logger.dart';
 import 'package:proxypin/ui/component/json/json_viewer.dart';
 import 'package:proxypin/ui/component/json/theme.dart';
-import 'package:proxypin/ui/component/multi_window.dart';
 import 'package:proxypin/ui/component/utils.dart';
-import 'package:proxypin/ui/desktop/setting/request_rewrite.dart';
 import 'package:proxypin/ui/mobile/setting/request_rewrite.dart';
 import 'package:proxypin/utils/crypto_body_decoder.dart';
 import 'package:proxypin/utils/css_formatter.dart';
@@ -45,7 +42,6 @@ import 'package:proxypin/utils/lang.dart';
 import 'package:proxypin/utils/num.dart';
 import 'package:proxypin/utils/platform.dart';
 import 'package:proxypin/utils/xml_formatter.dart';
-import 'package:window_manager/window_manager.dart';
 
 import '../component/json/json_text.dart';
 import '../component/search/highlight_text.dart';
@@ -61,8 +57,7 @@ Widget bodyContextMenu(BuildContext context, EditableTextState editableTextState
 ///@Author wanghongen
 class HttpBodyWidget extends StatefulWidget {
   final HttpMessage? httpMessage;
-  final bool inNewWindow; //是否在新窗口打开
-  final WindowController? windowController;
+  final bool inNewWindow; //是否在新页面打开
   final ScrollController? scrollController;
   final bool hideRequestRewrite; //是否隐藏请求重写
 
@@ -70,7 +65,6 @@ class HttpBodyWidget extends StatefulWidget {
       {super.key,
       required this.httpMessage,
       this.inNewWindow = false,
-      this.windowController,
       this.scrollController,
       this.hideRequestRewrite = false});
 
@@ -96,10 +90,6 @@ class HttpBodyState extends State<HttpBodyWidget> {
   @override
   void initState() {
     super.initState();
-    if (widget.windowController != null) {
-      HardwareKeyboard.instance.addHandler(onKeyEvent);
-    }
-
     _loadDecoded();
     _loadRewriteEnabled();
   }
@@ -132,18 +122,6 @@ class HttpBodyState extends State<HttpBodyWidget> {
     rewriteEnabled.value = requestRewrites.getRewriteRule(request.domainPath, types) != null;
   }
 
-  /// 按键事件
-  bool onKeyEvent(KeyEvent event) {
-    if ((HardwareKeyboard.instance.isMetaPressed || HardwareKeyboard.instance.isControlPressed) &&
-        event.logicalKey == LogicalKeyboardKey.keyW) {
-      HardwareKeyboard.instance.removeHandler(onKeyEvent);
-      widget.windowController?.close();
-      return true;
-    }
-
-    return false;
-  }
-
   Future<void> _loadDecoded() async {
     final message = widget.httpMessage;
     if (message == null) return;
@@ -155,7 +133,6 @@ class HttpBodyState extends State<HttpBodyWidget> {
 
   @override
   void dispose() {
-    HardwareKeyboard.instance.removeHandler(onKeyEvent);
     searchController.dispose();
     widget.scrollController?.dispose();
     super.dispose();
@@ -508,44 +485,13 @@ class HttpBodyState extends State<HttpBodyWidget> {
     var rule = requestRewrites.getRequestRewriteRule(request!, ruleType);
 
     var rewriteItems = await requestRewrites.getRewriteItems(rule);
-
     if (!mounted) return;
-
-    if (Platforms.isMobile()) {
-      Navigator.push(
-          context, MaterialPageRoute(builder: (_) => RewriteRule(rule: rule, items: rewriteItems, request: request)));
-    } else {
-      showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (BuildContext context) => RewriteRuleEdit(rule: rule, items: rewriteItems, request: request))
-          .then((value) {
-        if (value is RequestRewriteRule && mounted) {
-          FlutterToastr.show(localizations.saveSuccess, context);
-        }
-      });
-    }
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => RewriteRule(rule: rule, items: rewriteItems, request: request)));
   }
 
-  ///打开新窗口
+  ///在新页面打开
   void openNew() async {
-    if (Platforms.isDesktop()) {
-      var size = MediaQuery.of(context).size;
-      var ratio = 1.0;
-      if (Platform.isWindows) {
-        ratio = WindowManager.instance.getDevicePixelRatio();
-      }
-      final window = await DesktopMultiWindow.createWindow(jsonEncode(
-        {'name': 'HttpBodyWidget', 'httpMessage': widget.httpMessage, 'inNewWindow': true},
-      ));
-      window
-        ..setTitle(widget.httpMessage is HttpRequest ? localizations.requestBody : localizations.responseBody)
-        ..setSize(Size(800 * ratio, size.height * ratio))
-        ..center()
-        ..show();
-      return;
-    }
-
     Navigator.push(
         context, MaterialPageRoute(builder: (_) => HttpBodyWidget(httpMessage: widget.httpMessage, inNewWindow: true)));
   }

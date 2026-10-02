@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import 'package:proxypin/ui/component/multi_window_compat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_toastr/flutter_toastr.dart';
@@ -50,7 +49,7 @@ class _RegExpPageState extends State<RegExpPage> {
     pattern.addListener(onInputChangeMatch);
     input.addListener(onInputChangeMatch);
 
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.addHandler(onKeyEvent);
     }
   }
@@ -60,7 +59,7 @@ class _RegExpPageState extends State<RegExpPage> {
     pattern.dispose();
     input.dispose();
     replaceText.dispose();
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.removeHandler(onKeyEvent);
     }
     super.dispose();
@@ -71,7 +70,7 @@ class _RegExpPageState extends State<RegExpPage> {
     if ((HardwareKeyboard.instance.isMetaPressed || HardwareKeyboard.instance.isControlPressed) &&
         event.logicalKey == LogicalKeyboardKey.keyW) {
       HardwareKeyboard.instance.removeHandler(onKeyEvent);
-      WindowController.fromWindowId(widget.windowId!).close();
+      Navigator.of(context).pop();
       return true;
     }
 

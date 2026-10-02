@@ -15,7 +15,6 @@
  */
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:code_forge/code_forge.dart';
@@ -23,15 +22,9 @@ import 'package:flutter/material.dart';
 import 'package:proxypin/network/bin/configuration.dart';
 import 'package:proxypin/network/components/manager/environment_manager.dart';
 import 'package:proxypin/ui/component/chinese_font.dart';
-import 'package:proxypin/ui/component/multi_window_compat.dart';
-import 'package:proxypin/ui/component/multi_window.dart';
 import 'package:proxypin/ui/configuration.dart';
-import 'package:proxypin/ui/desktop/desktop.dart';
 import 'package:proxypin/ui/mobile/mobile.dart';
-import 'package:proxypin/utils/desktop_support.dart';
 import 'package:proxypin/utils/navigator.dart';
-import 'package:proxypin/utils/platform.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'l10n/app_localizations.dart';
 
@@ -48,44 +41,13 @@ void main(List<String> args) async {
     print('RustLib.init failed: $e');
   }
 
-  final windowController = Platforms.isDesktop() ? await DesktopMultiWindow.ensureInitialized() : null;
-
-  var instance = AppConfiguration.instance;
-
-  //多窗口
-  if (args.firstOrNull == 'multi_window') {
-    final windowId = windowController!.windowId;
-    final argument =
-        windowController.arguments.isEmpty ? const {} : jsonDecode(windowController.arguments) as Map<String, dynamic>;
-    DesktopMultiWindow.initializeFromArguments(argument);
-    var appConfiguration = await instance;
-
-    if (Platform.isMacOS) {
-      windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-    }
-    if (appConfiguration.themeMode != ThemeMode.system) {
-      windowManager.setBrightness(appConfiguration.themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light);
-    }
-    runApp(FluentApp(multiWindow(windowId, argument), appConfiguration));
-    return;
-  }
-
   var configuration = Configuration.instance;
   // 预热环境变量,避免第一个请求命中时才 IO
   unawaited(EnvironmentManager.preload());
-  //移动端
-  if (Platforms.isMobile()) {
-    var appConfiguration = await instance;
-    runApp(FluentApp(MobileHomePage((await configuration), appConfiguration), appConfiguration));
-    return;
-  }
+  var appConfiguration = await AppConfiguration.instance;
 
-  var appConfiguration = await instance;
-  if (Platforms.isDesktop()) {
-    await DesktopSupport.initialize(appConfiguration);
-  }
-
-  runApp(FluentApp(DesktopHomePage(await configuration, appConfiguration), appConfiguration));
+  //安卓手机版
+  runApp(FluentApp(MobileHomePage(await configuration, appConfiguration), appConfiguration));
 }
 
 class FluentApp extends StatelessWidget {

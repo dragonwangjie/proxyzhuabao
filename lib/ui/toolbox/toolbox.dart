@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:proxypin/l10n/app_localizations.dart';
 import 'package:proxypin/network/bin/server.dart';
-import 'package:proxypin/ui/component/multi_window.dart';
+import 'package:proxypin/ui/component/page_navigator.dart';
 import 'package:proxypin/ui/mobile/request/request_editor.dart';
 import 'package:proxypin/ui/toolbox/qr_code_page.dart';
 import 'package:proxypin/ui/toolbox/regexp.dart';
@@ -54,13 +54,9 @@ class _ToolboxState extends State<Toolbox> {
                     tooltip: localizations.httpRequest,
                   ),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (context) => const WebSocketRequestPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow('WebSocket', 'WebSocketRequestPage', size: const Size(800, 600));
+                      onTap: () {
+                        Navigator.of(context)
+                            .push(MaterialPageRoute(builder: (context) => const WebSocketRequestPage()));
                       },
                       icon: Icons.wifi_tethering,
                       text: 'WebSocket',
@@ -69,14 +65,8 @@ class _ToolboxState extends State<Toolbox> {
                     icon: Icons.javascript,
                     text: 'JavaScript',
                     tooltip: 'JavaScript',
-                    onTap: () async {
-                      if (Platforms.isMobile()) {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const JavaScript()));
-                        return;
-                      }
-
-                      var size = MediaQuery.of(context).size;
-                      MultiWindow.openWindow('JavaScript', 'JavaScript', size: Size(960, size.height));
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const JavaScript()));
                     },
                   ),
                 ],
@@ -87,42 +77,26 @@ class _ToolboxState extends State<Toolbox> {
                 spacing: 6,
                 children: [
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const JsonViewerPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow("JSON Viewer", 'JsonViewerPage', size: const Size(780, 820));
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const JsonViewerPage()));
                       },
                       icon: Icons.data_object,
                       text: 'JSON'),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const XmlViewerPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow("XML Viewer", 'XmlViewerPage', size: const Size(900, 700));
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const XmlViewerPage()));
                       },
                       icon: Icons.code,
                       text: 'XML'),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const TextDiffPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow(localizations.textDiff, 'TextDiffPage', size: const Size(1100, 720));
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const TextDiffPage()));
                       },
                       icon: Icons.difference_outlined,
                       text: localizations.textDiff),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const TextEditorPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow(localizations.textEditor, 'TextEditorPage', size: const Size(900, 800));
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const TextEditorPage()));
                       },
                       icon: Icons.note_alt_outlined,
                       text: localizations.textEditor,
@@ -167,11 +141,7 @@ class _ToolboxState extends State<Toolbox> {
                 children: [
                   IconText(
                     onTap: () {
-                      if (Platforms.isMobile()) {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AesPage()));
-                        return;
-                      }
-                      MultiWindow.openWindow("AES", "AesPage", size: const Size(700, 672));
+                      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AesPage()));
                     },
                     icon: Icons.enhanced_encryption_outlined,
                     text: 'AES',
@@ -185,46 +155,29 @@ class _ToolboxState extends State<Toolbox> {
                 spacing: 6,
                 children: [
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const TimestampPage()));
-                          return;
-                        }
-
-                        MultiWindow.openWindow(localizations.timestamp, 'TimestampPage', size: const Size(700, 350));
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const TimestampPage()));
                       },
                       icon: Icons.av_timer,
                       text: localizations.timestamp,
                       tooltip: localizations.timestamp),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const CertHashPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow(localizations.certHashName, 'CertHashPage');
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const CertHashPage()));
                       },
                       icon: Icons.key_outlined,
                       text: localizations.certHashName,
                       tooltip: localizations.certHashName),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const RegExpPage()));
-                          return;
-                        }
-                        MultiWindow.openWindow(localizations.regExp, 'RegExpPage', size: const Size(800, 720));
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const RegExpPage()));
                       },
                       icon: Icons.find_in_page_outlined,
                       text: localizations.regExp,
                       tooltip: localizations.regExp),
                   IconText(
-                      onTap: () async {
-                        if (Platforms.isMobile()) {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (context) => const QrCodePage()));
-                          return;
-                        }
-                        MultiWindow.openWindow(localizations.qrCode, 'QrCodePage');
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const QrCodePage()));
                       },
                       icon: Icons.qr_code_2,
                       text: localizations.qrCode,
@@ -237,15 +190,8 @@ class _ToolboxState extends State<Toolbox> {
   }
 
   Future<void> httpRequest() async {
-    if (Platforms.isMobile()) {
-      Navigator.of(context)
-          .push(MaterialPageRoute(builder: (context) => MobileRequestEditor(proxyServer: widget.proxyServer)));
-      return;
-    }
-
-    var size = MediaQuery.of(context).size;
-
-    MultiWindow.openWindow(localizations.httpRequest, "RequestEditor", size: Size(960, size.height));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => MobileRequestEditor(proxyServer: widget.proxyServer)));
   }
 }
 

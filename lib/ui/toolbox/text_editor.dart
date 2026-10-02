@@ -20,7 +20,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:code_forge/code_forge.dart';
-import 'package:proxypin/ui/component/multi_window_compat.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -109,7 +108,7 @@ class _TextEditorPageState extends State<TextEditorPage> {
     // 自己持有 FindController：CodeForge 默认会在 initState 创一个内部 controller，
     // 但拿不到引用，没法从工具栏 toggle 搜索面板。显式传一个进去就能控制。
     _findController = FindController(_controller);
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.addHandler(_onKeyEvent);
     }
   }
@@ -118,7 +117,7 @@ class _TextEditorPageState extends State<TextEditorPage> {
   void dispose() {
     _findController.dispose();
     _controller.dispose();
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.removeHandler(_onKeyEvent);
     }
     super.dispose();
@@ -129,7 +128,7 @@ class _TextEditorPageState extends State<TextEditorPage> {
     if ((HardwareKeyboard.instance.isMetaPressed || HardwareKeyboard.instance.isControlPressed) &&
         event.logicalKey == LogicalKeyboardKey.keyW) {
       HardwareKeyboard.instance.removeHandler(_onKeyEvent);
-      WindowController.fromWindowId(widget.windowId!).close();
+      Navigator.of(context).pop();
       return true;
     }
     return false;

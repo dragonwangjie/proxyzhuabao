@@ -28,7 +28,7 @@ import 'package:proxypin/network/util/logger.dart';
 import '../../utils/lang.dart';
 import '../../utils/platform.dart';
 import '../toolbox/encoder.dart';
-import 'multi_window.dart';
+import 'page_navigator.dart';
 
 const contentMap = {
   ContentType.json: Icons.data_object,

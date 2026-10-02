@@ -18,7 +18,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:code_forge/code_forge.dart';
-import 'package:proxypin/ui/component/multi_window_compat.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -62,7 +61,7 @@ class _XmlViewerPageState extends State<XmlViewerPage> {
     super.initState();
     _controller = CodeForgeController()..text = widget.initialText ?? '';
 
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.addHandler(_onKeyEvent);
     }
   }
@@ -70,7 +69,7 @@ class _XmlViewerPageState extends State<XmlViewerPage> {
   @override
   void dispose() {
     _controller.dispose();
-    if (Platforms.isDesktop() && widget.windowId != null) {
+    if (widget.windowId != null) {
       HardwareKeyboard.instance.removeHandler(_onKeyEvent);
     }
     super.dispose();
@@ -81,7 +80,7 @@ class _XmlViewerPageState extends State<XmlViewerPage> {
     if ((HardwareKeyboard.instance.isMetaPressed || HardwareKeyboard.instance.isControlPressed) &&
         event.logicalKey == LogicalKeyboardKey.keyW) {
       HardwareKeyboard.instance.removeHandler(_onKeyEvent);
-      WindowController.fromWindowId(widget.windowId!).close();
+      Navigator.of(context).pop();
       return true;
     }
     return false;

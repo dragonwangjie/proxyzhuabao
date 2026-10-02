@@ -13,9 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import 'dart:io';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_toastr/flutter_toastr.dart';
@@ -23,14 +20,7 @@ import 'package:proxypin/l10n/app_localizations.dart';
 import 'package:proxypin/native/vpn.dart';
 import 'package:proxypin/network/bin/server.dart';
 import 'package:proxypin/network/util/logger.dart';
-import 'package:proxypin/ui/desktop/ssl/pc_cert.dart';
-import 'package:proxypin/ui/configuration.dart';
 import 'package:proxypin/utils/lang.dart';
-import 'package:proxypin/utils/desktop_tray.dart';
-import 'package:proxypin/utils/platform.dart';
-import 'package:window_manager/window_manager.dart';
-
-import '../mobile/setting/ssl.dart';
 
 ///启动按钮
 ///@author wanghongen
@@ -59,19 +49,13 @@ class SocketLaunch extends StatefulWidget {
   State<StatefulWidget> createState() => _SocketLaunchState();
 }
 
-class _SocketLaunchState extends State<SocketLaunch> with WindowListener, WidgetsBindingObserver {
+class _SocketLaunchState extends State<SocketLaunch> with WidgetsBindingObserver {
   AppLocalizations get localizations => AppLocalizations.of(context)!;
   bool started = false;
 
   @override
   void initState() {
     super.initState();
-    if (Platforms.isDesktop()) {
-      windowManager.addListener(this);
-      windowManager.setPreventClose(true);
-      DesktopTrayManager.instance.setQuitHandler(appExit);
-    }
-
     WidgetsBinding.instance.addObserver(this);
     //启动代理服务器
     if (widget.startup) {
@@ -90,101 +74,8 @@ class _SocketLaunchState extends State<SocketLaunch> with WindowListener, Widget
 
   @override
   void dispose() {
-    windowManager.removeListener(this);
     WidgetsBinding.instance.removeObserver(this);
-    if (Platforms.isDesktop()) {
-      DesktopTrayManager.instance.setQuitHandler(null);
-    }
     super.dispose();
-  }
-
-  @override
-  void onWindowClose() async {
-    logger.d("onWindowClose");
-    await _handleWindowClose();
-  }
-
-  Future<void> _handleWindowClose() async {
-    final appConfiguration = AppConfiguration.current;
-    if (Platforms.isDesktop() && appConfiguration?.minimizeToTray == null || appConfiguration?.minimizeToTray == true) {
-      if (appConfiguration?.minimizeToTray == null) {
-        final minimize = await _showTrayClosePrompt();
-        if (!mounted) {
-          return;
-        }
-
-        appConfiguration?.minimizeToTray = minimize;
-        await appConfiguration?.flushConfig();
-
-        if (!minimize) {
-          await appExit();
-          return;
-        }
-      }
-
-      try {
-        await DesktopTrayManager.instance.showToTray();
-        return;
-      } catch (e) {
-        logger.e('show to tray failed, fallback to exit', error: e);
-      }
-    }
-
-    await appExit();
-  }
-
-  Future<bool> _showTrayClosePrompt() async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) {
-            return AlertDialog(
-              title: Text(localizations.minimizeToTrayTitle),
-              content: SizedBox(width: 320, child: Text(maxLines: 3, localizations.trayClosePromptContent)),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: Text(localizations.trayCloseExitAnyway),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  child: Text(localizations.trayCloseMinimizeToTray),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-  }
-
-  Future<void> appExit() async {
-    logger.d("appExit");
-    await widget.proxyServer.stop();
-    started = false;
-    if (Platforms.isDesktop()) {
-      await DesktopTrayManager.instance.exitApp();
-      windowManager.setPreventClose(false);
-      await windowManager.destroy();
-    }
-
-    if (!Platform.isWindows && !Platform.isLinux) {
-      try {
-        await SystemNavigator.pop(animated: true).timeout(const Duration(milliseconds: 150));
-      } catch (_) {
-        //
-      }
-    }
-
-    exit(0);
-  }
-
-  @override
-  Future<AppExitResponse> didRequestAppExit() async {
-    bool isPreventClose = await windowManager.isPreventClose();
-    if (!isPreventClose || Platform.isMacOS) {
-      await appExit();
-    }
-    return super.didRequestAppExit();
   }
 
   @override
@@ -196,7 +87,7 @@ class _SocketLaunchState extends State<SocketLaunch> with WindowListener, Widget
         });
       }
 
-      if (Platforms.isMobile() && started == false) {
+      if (started == false) {
         Vpn.isRunning().then((value) {
           Vpn.isVpnStarted = value;
           SocketLaunch.startStatus.value = ValueWrap.of(value);
@@ -253,38 +144,25 @@ class _SocketLaunchState extends State<SocketLaunch> with WindowListener, Widget
 
   ///启动代理服务器
   Future<void> start() async {
-    try {
-      if (!widget.serverLaunch) {
-        await widget.onStart?.call();
+    if (!widget.serverLaunch) {
+      await widget.onStart?.call();
+      setState(() {
+        started = true;
+      });
+      return;
+    }
+
+    widget.proxyServer.start().then((value) {
+      if (mounted) {
         setState(() {
           started = true;
         });
-        return;
       }
-
-      widget.proxyServer.start().then((value) {
-        if (mounted) {
-          setState(() {
-            started = true;
-          });
-        }
-        widget.onStart?.call();
-      }).catchError((e) {
-        logger.e("启动代理服务器失败", error: e);
-        String message = localizations.proxyPortRepeat(widget.proxyServer.port);
-        FlutterToastr.show(message, context, duration: 3);
-      });
-    } finally {
-      Future.delayed(const Duration(seconds: 5)).then((value) {
-        if (!mounted) {
-          return;
-        }
-        if (Platforms.isDesktop()) {
-          PCCertChecker.check(context);
-        } else if (Platform.isIOS) {
-          IOSCertChecker.check(context);
-        }
-      });
-    }
+      widget.onStart?.call();
+    }).catchError((e) {
+      logger.e("启动代理服务器失败", error: e);
+      String message = localizations.proxyPortRepeat(widget.proxyServer.port);
+      FlutterToastr.show(message, context, duration: 3);
+    });
   }
 }

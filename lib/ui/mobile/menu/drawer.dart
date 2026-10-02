@@ -50,7 +50,7 @@ import 'package:proxypin/utils/listenable_list.dart';
 
 import '../../component/proxy_port_setting.dart';
 import '../../component/widgets.dart';
-import '../../desktop/setting/external_proxy.dart';
+import '../widgets/external_proxy.dart';
 
 ///左侧抽屉
 class DrawerWidget extends StatelessWidget {
@@ -185,6 +185,12 @@ class DrawerWidget extends StatelessWidget {
                 title: Text(localizations.mcpService),
                 leading: const Icon(Icons.smart_toy_outlined),
                 onTap: () => navigator(context, MobileMcpSetting(proxyServer: proxyServer))),
+            ListTile(
+                title: Text(Localizations.localeOf(context).languageCode == 'zh'
+                    ? '本地 MCP 连接'
+                    : 'Local MCP Connection'),
+                leading: const Icon(Icons.phonelink_setup_outlined),
+                onTap: () => navigator(context, MobileMcpLocalSetting(proxyServer: proxyServer))),
             ListTile(
                 title: Text(localizations.setting),
                 leading: const Icon(Icons.settings),

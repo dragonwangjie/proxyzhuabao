@@ -119,6 +119,12 @@ class AppConfiguration {
   /// 被占用时由服务回退到系统随机端口。
   int? mcpPort;
 
+  /// 是否启用手机本地 MCP 连接（127.0.0.1，无鉴权），供本机 AI 客户端直连
+  bool mcpLocalEnabled = false;
+
+  /// 本地 MCP 连接监听端口。为 null/非法时使用默认端口 9128。
+  int? mcpLocalPort;
+
   AppConfiguration._();
 
   /// 单例
@@ -242,6 +248,9 @@ class AppConfiguration {
       mcpToken = config['mcpToken'] as String?;
       var port = config['mcpPort'];
       mcpPort = port is int && port > 0 && port <= 65535 ? port : null;
+      mcpLocalEnabled = config['mcpLocalEnabled'] ?? false;
+      var localPort = config['mcpLocalPort'];
+      mcpLocalPort = localPort is int && localPort > 0 && localPort <= 65535 ? localPort : null;
     } catch (e) {
       logger.e(e);
     }
@@ -292,6 +301,8 @@ class AppConfiguration {
       'mcpRedactEnabled': mcpRedactEnabled,
       if (mcpToken != null) 'mcpToken': mcpToken,
       if (mcpPort != null) 'mcpPort': mcpPort,
+      'mcpLocalEnabled': mcpLocalEnabled,
+      if (mcpLocalPort != null) 'mcpLocalPort': mcpLocalPort,
     };
   }
 }

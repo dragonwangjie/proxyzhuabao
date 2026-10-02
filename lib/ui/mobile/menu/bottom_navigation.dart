@@ -344,6 +344,13 @@ class SettingPage extends StatelessWidget {
                 onTap: () => navigator(context, MobileMcpSetting(proxyServer: proxyServer))),
             Divider(height: 0, thickness: 0.3, color: Theme.of(context).dividerColor.withValues(alpha: 0.22)),
             ListTile(
+                title: Text(Localizations.localeOf(context).languageCode == 'zh'
+                    ? '本地 MCP 连接'
+                    : 'Local MCP Connection'),
+                trailing: const Icon(Icons.keyboard_arrow_right),
+                onTap: () => navigator(context, MobileMcpLocalSetting(proxyServer: proxyServer))),
+            Divider(height: 0, thickness: 0.3, color: Theme.of(context).dividerColor.withValues(alpha: 0.22)),
+            ListTile(
                 title: Text(localizations.setting),
                 trailing: const Icon(Icons.keyboard_arrow_right),
                 onTap: () =>

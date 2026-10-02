@@ -4,9 +4,10 @@ ProxyPin's MCP service exposes captured traffic to AI assistants (Claude Code, C
 
 ## Connection
 
-- **HTTP** (the user-facing transport): the desktop app listens on `http://127.0.0.1:9127/mcp` (loopback, no auth). Register it with e.g. `claude mcp add proxypin_desktop -s user --transport http "http://127.0.0.1:9127/mcp"`. If port 9127 is already in use the app picks a random free port — use the URL shown in the settings panel rather than hand-copying. No extra bridge process is started, so launching the AI client does not launch ProxyPin.
+- **HTTP on the phone — LAN mode** (default): the app binds `0.0.0.0` on port `9127` and requires `Authorization: Bearer <token>` (the token is shown in *Settings → MCP 服务*). Register it from a computer on the same Wi-Fi with e.g. `claude mcp add proxypin_mobile -s user --transport http "http://<phone-ip>:9127/mcp"` — or fetch the one-click setup script (`curl http://<phone-ip>:9127/mcp/setup.sh`). If port 9127 is taken the app picks a random free port — use the URL shown in the settings page rather than hand-copying.
+- **HTTP on the phone — local mode** (`本地 MCP 连接`): a second, *unauthenticated* listener on `http://127.0.0.1:9128/mcp`, for AI clients running on the phone itself (e.g. Termux). A computer can reach the same listener over USB: `adb forward tcp:9128 tcp:9128`, then `claude mcp add proxypin_mobile --transport http "http://127.0.0.1:9128/mcp"`. The settings page has a built-in self-test that runs `initialize` + `tools/list` against it.
 
-Prerequisites: desktop ProxyPin is running and the MCP service is enabled. By default tools read the **live capture buffer** (already-captured traffic — ask the user to trigger the request first), but they can also read **saved history sessions** (the History tab): call `list_histories`, then pass `history_id`. The proxy itself does not need to be capturing to analyze a saved session.
+Prerequisites: ProxyPin is running on the phone and the MCP service (LAN or local) is enabled. By default tools read the **live capture buffer** (already-captured traffic — ask the user to trigger the request first), but they can also read **saved history sessions** (the History tab): call `list_histories`, then pass `history_id`. The proxy itself does not need to be capturing to analyze a saved session.
 
 ## Tool surface
 

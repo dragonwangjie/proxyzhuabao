@@ -29,8 +29,6 @@ import 'package:proxypin/network/util/byte_buf.dart';
 import 'package:proxypin/network/util/byte_utils.dart';
 import 'package:proxypin/network/util/logger.dart';
 import 'package:proxypin/network/util/system_proxy.dart';
-import 'package:proxy_manager/proxy_manager.dart';
-
 import '../channel/channel.dart';
 import 'codec.dart';
 import 'h2/frame.dart';
@@ -59,8 +57,7 @@ class HttpClients {
     var client = Client()..initChannel((channel) => channel.dispatcher.channelHandle(HttpClientCodec(), handler));
 
     if (proxyInfo == null) {
-      var proxyTypes = hostAndPort.isSsl() ? ProxyTypes.https : ProxyTypes.http;
-      proxyInfo = await SystemProxy.getSystemProxy(proxyTypes);
+      proxyInfo = await SystemProxy.getSystemProxy();
     }
 
     HostAndPort connectHost = proxyInfo == null ? hostAndPort : HostAndPort.host(proxyInfo.host, proxyInfo.port!);

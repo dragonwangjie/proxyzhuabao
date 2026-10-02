@@ -17,7 +17,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:proxypin/ui/component/multi_window_compat.dart';
 import 'package:proxypin/network/components/manager/environment_manager.dart';
 import 'package:proxypin/network/http/http.dart';
 import 'package:proxypin/network/util/cache.dart';
@@ -85,17 +84,6 @@ async function onResponse(context, request, response) {
     return _instance!;
   }
 
-  static void registerConsoleLog(String fromWindowId) {
-    LogHandler logHandler = LogHandler(
-        channelId: fromWindowId,
-        handle: (logInfo) {
-          DesktopMultiWindow.invokeMethod(fromWindowId, "consoleLog", logInfo.toJson()).onError((e, t) {
-            logger.e("consoleLog error: $e");
-            removeLogHandler(fromWindowId);
-          });
-        });
-    registerLogHandler(logHandler);
-  }
 
   static void registerLogHandler(LogHandler logHandler) {
     if (_logHandlers.any((it) => it.channelId == logHandler.channelId)) {

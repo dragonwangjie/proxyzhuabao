@@ -130,20 +130,8 @@ class ProxyServer {
     return server;
   }
 
-  /// 设置系统代理
-  Future<void> setSystemProxyEnable(bool enable) async {
-    if (!Platforms.isDesktop()) {
-      return;
-    }
-
-    //关闭系统代理 恢复成外部代理地址
-    if (!enable && configuration.externalProxy?.enabled == true) {
-      await SystemProxy.setSystemProxy(configuration.externalProxy!.port!, enableSsl, configuration.proxyPassDomains);
-      return;
-    }
-
-    await SystemProxy.setSystemProxyEnable(port, enable, enableSsl, passDomains: configuration.proxyPassDomains);
-  }
+  /// 设置系统代理（安卓手机版出网由 VPN 服务接管，无需系统代理，空实现）
+  Future<void> setSystemProxyEnable(bool enable) async {}
 
   /// 重启代理服务
   Future<void> restart() async {
