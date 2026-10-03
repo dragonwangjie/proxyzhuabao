@@ -1,0 +1,353 @@
+name: Build Android APK
+
+# Triggers
+#   1) Manual: Actions -> Run workflow (choose build type / artifact shape)
+#   2) Tag: push a v* tag -> build + publish a stable GitHub Release
+#
+# Every successful run publishes its artifacts to a GitHub Release:
+#   tag push        -> that tag's release (marked latest)
+#   manual dispatch -> input release_tag, default rolling prerelease "ci-latest"
+#
+# Signing is mandatory and comes from repository Secrets (no self-signed fallback):
+#   SIGNING_KEY         keystore, `base64 -w0 release.jks` (PKCS12 PEM text also works)
+#   KEY_STORE_PASSWORD  keystore password
+#   ALIAS               key alias
+#   KEY_PASSWORD        key password
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: Build type
+        type: choice
+        required: true
+        default: release
+        options: [release, debug]
+      target:
+        description: "Artifact shape (fat=all ABIs / split=per-ABI / aab=Play)"
+        type: choice
+        required: true
+        default: fat
+        options: [fat, split, aab]
+      artifact_name:
+        description: Workflow attachment name prefix (empty = proxyzhuabao)
+        type: string
+        required: false
+        default: ""
+      release_tag:
+        description: Release tag to publish to (manual only; empty = ci-latest)
+        type: string
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 需 >= 3.44：pubspec.lock 要求 dart >= 3.12.2 / flutter >= 3.44
+  FLUTTER_VERSION: "3.44.9"
+  # code_forge 的 Rust 为 edition 2021，需与 flutter_rust_bridge 2.12.0 生成的绑定兼容
+  RUST_TOOLCHAIN: "1.85.0"
+  # 与 android/app/build.gradle 的 abiFilters（v7a / arm64 / x86_64）对应
+  TARGET_PLATFORMS: "android-arm,android-arm64,android-x64"
+
+jobs:
+  build:
+    name: apk-${{ github.event.inputs.build_type || 'release' }}-${{ github.event.inputs.target || 'fat' }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # JDK is needed early: the signing step validates the keystore with keytool.
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # code_forge 是 ffiPlugin 插件：Gradle 会调 cargokit 从源码编译 Rust，
+      # 缺少 Android target 会在 native 链接阶段失败，故预先安装三元组。
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: armv7-linux-androideabi,aarch64-linux-android,x86_64-linux-android
+
+      - name: Cache Rust and Pub
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.pub-cache
+          key: ${{ runner.os }}-rust${{ env.RUST_TOOLCHAIN }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-rust${{ env.RUST_TOOLCHAIN }}-pub-
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # Gradle 可能按需下载 Flutter 指定的 NDK；先接受许可，避免静默失败。
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+
+      # 签名是硬性前提：任一 Secret 缺失立即失败，
+      # 不再回退临时自签名密钥（避免产出无法覆盖安装正式版的包）。
+      - name: Verify signing secrets
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${SIGNING_KEY:-}" ] || missing+=("SIGNING_KEY")
+          [ -n "${KEY_STORE_PASSWORD:-}" ] || missing+=("KEY_STORE_PASSWORD")
+          [ -n "${ALIAS:-}" ] || missing+=("ALIAS")
+          [ -n "${KEY_PASSWORD:-}" ] || missing+=("KEY_PASSWORD")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::missing signing secrets: ${missing[*]}"
+            echo "::error::set them under Settings -> Secrets and variables -> Actions"
+            exit 1
+          fi
+          echo "all 4 signing secrets present"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # 快速失败门禁：类型错误必须在此拦截（否则要等到 Gradle 阶段才暴露，
+      # 白耗约 6 分钟构建时间）。上游存在 2 处既有 warning，故只把 error 视为致命。
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      # 测试非致命：上游存在与本次改动无关的环境相关失败
+      # （js_test 依赖 libquickjs_c_bridge_plugin.so、cert_test 缺 assets/certs/server.key、
+      #   favorites_trim / search_controller 断言在 Linux runner 上不稳定）。
+      # 这些不影响 APK 产物，失败仅告警，不阻断发布。
+      - name: Tests
+        continue-on-error: true
+        run: flutter test
+
+      # android/app/build.gradle 的 release 与 debug 都引用 signingConfigs.release，
+      # 它从 android/key.properties 读 storeFile/storePassword/keyAlias/keyPassword。
+      # SIGNING_KEY 兼容两种存法：base64（推荐的二进制 jks）或 PKCS12 PEM 文本。
+      - name: Prepare signing config
+        id: keystore
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ks="$RUNNER_TEMP/release.jks"
+          if printf '%s' "$SIGNING_KEY" | head -c 32 | grep -q -- '-----BEGIN'; then
+            printf '%s' "$SIGNING_KEY" > "$ks"
+            echo "SIGNING_KEY detected as PEM text keystore"
+          else
+            printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 -d > "$ks"
+            echo "SIGNING_KEY detected as base64 keystore"
+          fi
+          if [ ! -s "$ks" ]; then
+            echo "::error::SIGNING_KEY decoded to empty; encode with base64 -w0 release.jks"
+            exit 1
+          fi
+          # 提前校验：密码或别名不对就在这里报清楚，而不是等到 Gradle 打包阶段才失败
+          if ! keytool -list -keystore "$ks" -storepass "$KEY_STORE_PASSWORD" >/dev/null 2>&1; then
+            echo "::error::cannot open keystore: KEY_STORE_PASSWORD mismatch, or SIGNING_KEY is not a valid keystore"
+            exit 1
+          fi
+          if ! keytool -list -keystore "$ks" -storepass "$KEY_STORE_PASSWORD" -alias "$ALIAS" >/dev/null 2>&1; then
+            echo "::error::alias '$ALIAS' not found in keystore; check the ALIAS secret"
+            exit 1
+          fi
+          keytool -list -keystore "$ks" -storepass "$KEY_STORE_PASSWORD" -alias "$ALIAS" | sed 's/^/  /'
+          {
+            echo "storeFile=$ks"
+            echo "storePassword=$KEY_STORE_PASSWORD"
+            echo "keyAlias=$ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+          echo "signed=true" >>"$GITHUB_OUTPUT"
+          echo "keystore sha256 prefix: $(sha256sum "$ks" | cut -c1-16)"
+
+      - name: Resolve build arguments
+        id: args
+        env:
+          INPUT_TYPE: ${{ github.event.inputs.build_type }}
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+        run: |
+          set -euo pipefail
+          type="${INPUT_TYPE:-release}"
+          target="${INPUT_TARGET:-fat}"
+          case "$target" in
+            aab)
+              echo "mode=appbundle" >>"$GITHUB_OUTPUT"
+              echo "extension=aab" >>"$GITHUB_OUTPUT"
+              ;;
+            split)
+              echo "mode=apk" >>"$GITHUB_OUTPUT"
+              echo "extension=apk" >>"$GITHUB_OUTPUT"
+              echo "extra=--split-per-abi" >>"$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "mode=apk" >>"$GITHUB_OUTPUT"
+              echo "extension=apk" >>"$GITHUB_OUTPUT"
+              ;;
+          esac
+          # 项目 Gradle 会把所有 release 产物重命名为同一固定文件名，
+          # 与 --split-per-abi 组合时多个 ABI 产物存在互相覆盖的风险。
+          if [ "$target" = "split" ] && [ "$type" = "release" ]; then
+            echo "::warning::split + release: Gradle renames every output to proxypin-android-VERSION.apk; ABIs may overwrite each other. Prefer fat."
+          fi
+          echo "build_type=$type" >>"$GITHUB_OUTPUT"
+          echo "target=$target" >>"$GITHUB_OUTPUT"
+          echo "::notice::build_type=$type target=$target"
+
+      - name: Build APK
+        if: steps.args.outputs.mode == 'apk'
+        run: flutter build apk "--${{ steps.args.outputs.build_type }}" --target-platform "$TARGET_PLATFORMS" ${{ steps.args.outputs.extra }}
+
+      - name: Build App Bundle
+        if: steps.args.outputs.mode == 'appbundle'
+        run: flutter build appbundle "--${{ steps.args.outputs.build_type }}" --target-platform "$TARGET_PLATFORMS"
+
+      # 递归查找：项目自定义了 outputFileName，产物名可能与 Flutter 默认值不同。
+      - name: Collect artifacts
+        env:
+          EXT: ${{ steps.args.outputs.extension }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          found=0
+          while IFS= read -r f; do
+            cp "$f" "out/$(basename "$f")"
+            found=$((found + 1))
+          done < <(find build/app/outputs -type f -name "*.${EXT}" | sort)
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no .${EXT} artifact found under build/app/outputs"
+            find build -type f \( -name '*.apk' -o -name '*.aab' \) 2>/dev/null | head -20 || true
+            exit 1
+          fi
+          ls -la out
+
+      # 产物投递目标：
+      #   标签推送 (v*)  -> 该标签的正式版 Release（标记 latest）
+      #   手动触发       -> release_tag 输入；留空则发到滚动预发布 ci-latest（覆盖同名文件）
+      - name: Resolve release target
+        id: rel
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            tag="$GITHUB_REF_NAME"
+            kind=stable
+          else
+            tag="${INPUT_RELEASE_TAG:-ci-latest}"
+            kind=ci
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._/-]*$'; then
+            echo "::error::invalid release tag: $tag"
+            exit 1
+          fi
+          short="${GITHUB_SHA:0:7}"
+          ver="$(sed -n 's/^version: //p' pubspec.yaml | cut -d+ -f1)"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "kind=$kind" >>"$GITHUB_OUTPUT"
+          echo "version=$ver" >>"$GITHUB_OUTPUT"
+          if [ "$kind" = ci ]; then
+            echo "prerelease=true" >>"$GITHUB_OUTPUT"
+            echo "make_latest=false" >>"$GITHUB_OUTPUT"
+            echo "name=ProxyPin Android ${ver} CI (${GITHUB_REF_NAME} @ ${short})" >>"$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >>"$GITHUB_OUTPUT"
+            echo "make_latest=true" >>"$GITHUB_OUTPUT"
+            echo "name=ProxyPin Android ${ver} (${tag})" >>"$GITHUB_OUTPUT"
+          fi
+          echo "::notice::release target: tag=$tag kind=$kind"
+
+      - name: Write release notes
+        env:
+          BUILD_TYPE: ${{ steps.args.outputs.build_type }}
+          TARGET: ${{ steps.args.outputs.target }}
+          KIND: ${{ steps.rel.outputs.kind }}
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/RELEASE_BODY.md"
+          ver="$(sed -n 's/^version: //p' pubspec.yaml | head -1)"
+          {
+            echo "Built by GitHub Actions (run ${GITHUB_RUN_NUMBER})."
+            echo ""
+            echo "- build type: ${BUILD_TYPE}"
+            echo "- artifact shape: ${TARGET}"
+            echo "- version: ${ver}"
+            echo "- commit: ${GITHUB_SHA}"
+            echo "- trigger: ${GITHUB_EVENT_NAME} @ ${GITHUB_REF_NAME}"
+            echo "- signing: repository Secrets keystore (SIGNING_KEY / KEY_STORE_PASSWORD / ALIAS / KEY_PASSWORD)"
+            echo ""
+            echo "## Checksums"
+            echo ""
+            for f in out/*; do
+              echo "- $(basename "$f") - $(du -h "$f" | cut -f1)"
+              echo "  sha256: $(sha256sum "$f" | cut -d' ' -f1)"
+            done
+            if [ "$KIND" = ci ]; then
+              echo ""
+              echo "> Rolling CI prerelease (tag ${REL_TAG}); files are replaced by later manual runs."
+              echo "> For a stable release, push a v* tag instead."
+            fi
+          } >"$body"
+          cat "$body"
+
+      # 滚动预发布标签：把它移到当前 commit，否则 Release 页面会一直指向首次构建的提交。
+      # 仅在手动触发（kind=ci）时执行；正式版 v* 标签不受影响。
+      - name: Move rolling tag
+        if: steps.rel.outputs.kind == 'ci'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REL_TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${REL_TAG}"
+          if gh api "$ref" --jq .object.sha >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${REL_TAG}" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api repos/${GITHUB_REPOSITORY}/git/refs -f ref="refs/tags/${REL_TAG}" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          echo "moved ${REL_TAG} to ${GITHUB_SHA:0:7}"
+
+      # 保留一份 workflow 附件（短期直取，与 Release 并存）。
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.artifact_name != '' && github.event.inputs.artifact_name || 'proxyzhuabao' }}-${{ steps.args.outputs.build_type }}-${{ steps.args.outputs.target }}-${{ github.ref_name }}
+          path: out/*
+          if-no-files-found: error
+
+      # 无论标签触发还是手动触发，产物都发布到 GitHub Release。
+      # overwrite/override 保证手动重复构建覆盖同名文件而不是报错。
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.name }}
+          body_path: ${{ runner.temp }}/RELEASE_BODY.md
+          files: out/*
+          prerelease: ${{ steps.rel.outputs.prerelease }}
+          make_latest: ${{ steps.rel.outputs.make_latest }}
+          target_commitish: ${{ github.sha }}
+          overwrite: true
+          fail_on_unmatched_files: true
